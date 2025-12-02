@@ -41,26 +41,26 @@ install()
 
     if [[ "$macos" = true ]]
     then
-        if command brew install "$tool"
+        if brew install "$tool"
         then
             echo " "
             echo " [ tick ] $tool installed. "
             return 0
         else
-            echo " [ x ] could'nt install $tool using 'brew'" 
+            echo " [ cross ] could'nt install $tool using 'brew'" 
             return 1
         fi
     fi
 
     if [[ "$linux" = true ]]
     then
-        if command sudo apt install "$tool"
+        if sudo apt install "$tool"
         then
             echo " "
             echo " [ tick ] $tool installed. "
             return 0
         else
-            echo " [ x ] could'nt install $tool using $OSTYPE package manager "
+            echo " [ cross ] could'nt install $tool using $OSTYPE package manager "
             return 1
         fi
     fi
@@ -94,6 +94,36 @@ create_project()
             *) echo "Invalid Input"; exit 1 ;;
         esac
     fi
+
+    cd ./"$PROJECT_NAME" || { echo "$(pwd): No such directory"; exit 1; }
+}
+
+create_ignore_file()
+{
+
+cat - << _EOF_ > .gitignore
+build/
+*.o
+*.log
+_EOF_
+
+}
+
+init_project_repo()
+{
+    local git_status="$1"
+    if [[ "$git_status" = true ]]
+    then
+        git init .
+
+        create_ignore_file
+        echo "# $PROJECT_NAME" >> README.md
+
+        git add --all .
+        git commit -m "Initial project setup"
+    else
+        echo "[ cross ] Git not found. Skipping Repository Initialisation."
+    fi
 }
 
 if [[ $# -ne 1 ]]
@@ -108,6 +138,18 @@ hasmake=false
 hasack=false
 
 tools=("git" "gcc" "make" "ack")
+
+check_tool()
+{
+    local tool="$1"
+    if hascmmnd "$tool"
+    then
+        found "$tool"
+        "has${tool}"=true
+    else
+        install "$tool" && "has${tool}"=true
+    fi
+}
 
 for tool in "${tools[@]}"
 do
@@ -140,13 +182,7 @@ do
             fi
             ;;
         "ack")
-            if hascmmnd "$tool"
-            then
-                found "$tool"
-                hasack=true
-            else
-                install "$tool" && hasack=true
-            fi
+            check_tool "$tool"
             ;;
         *) echo "$0: Tool not supported"
     esac
@@ -154,5 +190,9 @@ done
 
 echo " "
 
-create_project "$PROJECT_NAME"
-exit 1
+if init_project_repo "$hasgit"
+then
+    echo "[ tick ] $PROJECT_NAME Repo Initialised."
+fi
+
+exit 0
