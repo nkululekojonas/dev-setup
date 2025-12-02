@@ -13,7 +13,7 @@ A bash script that automates C project setup with proper directory structure, de
 ## Usage
 
 ```bash
-./setup-dev.sh project_name
+dev-setup.sh project_name
 ```
 
 ## Requirements
@@ -25,7 +25,7 @@ The script will attempt to install missing tools, but you need:
 ## Example
 
 ```bash
-./setup-dev.sh my-c-project
+dev-setup.sh my-c-project
 cd my-c-project
 # Ready to code - src/ and include/ directories created
 ```
