@@ -139,16 +139,37 @@ hasack=false
 
 tools=("git" "gcc" "make" "ack")
 
-check_tool()
+check_tool_status()
 {
     local tool="$1"
     if hascmmnd "$tool"
     then
         found "$tool"
-        "has${tool}"=true
+        update_tool_status "$tool"
     else
-        install "$tool" && "has${tool}"=true
+        install "$tool" 
+        update_tool_status "$tool"
     fi
+}
+
+update_tool_status()
+{
+    local tool="$1"
+    case "$tool" in
+        "git") 
+            hasgit=true
+            ;;
+        "gcc") 
+            hasgcc=true
+            ;;
+        "make") 
+            hasmake=true
+            ;;
+        "ack")
+            hasack=true
+            ;;
+        *) echo "$0: Tool not supported"
+    esac
 }
 
 for tool in "${tools[@]}"
@@ -182,7 +203,7 @@ do
             fi
             ;;
         "ack")
-            check_tool "$tool"
+            check_tool_status "$tool"
             ;;
         *) echo "$0: Tool not supported"
     esac
@@ -195,4 +216,5 @@ then
     echo "[ tick ] $PROJECT_NAME Repo Initialised."
 fi
 
+echo "$hasack"
 exit 0
