@@ -2,30 +2,35 @@
 #
 # setup-dev.sh: C Dev Setup Automator
 
-# Constants
-PROJECT_NAME="$1"
-
-macos=false
-linux=false
-case "$OSTYPE" in
-    darwin*) macos=true ;;
-    linux*) linux=true ;;
-    *)
-        echo "$0: unsupported $OSTYPE" 
-        exit 1
-        ;;
-esac
-
 usage()
 {
     echo "usage: $0 directory_name"
     exit 1
 }
 
-hascmmnd()
+error()
 {
-    local commnd="$1"
-    if command -v "$commnd" &>/dev/null
+    local message="$1"
+    echo -e "\e[1;31m[ \u2717 ] ${message}\e[0m"
+}
+
+success()
+{
+    local message="$1"
+    echo -e "\e[1;32m[ \u2713 ] ${message}\e[0m"
+
+}
+
+info()
+{
+    local message="$1"
+    echo -e "\e[1;33m[ ! ] ${message}\e[0m"
+}
+
+has_cmd()
+{
+    local cmd="$1"
+    if command -v "$cmd" &> /dev/null
     then
         return 0
     else
@@ -36,40 +41,49 @@ hascmmnd()
 install()
 {
     local tool="$1"
-    echo " "
+    echo 
     echo "Attempting to install [ $tool ] ..."
 
+    # First Check Macos
     if [[ "$macos" = true ]]
     then
-        if brew install "$tool"
+        if brew install "$tool" &> /dev/null
         then
-            echo " "
-            echo " [ tick ] $tool installed. "
+            success "$tool installed using 'brew'"
             return 0
         else
-            echo " [ cross ] could'nt install $tool using 'brew'" 
+            error "Couldn't install $tool using 'brew'"
             return 1
         fi
-    fi
 
-    if [[ "$linux" = true ]]
+    elif [[ "$linux" = true ]]
     then
-        if sudo apt install "$tool"
+        if sudo apt install "$tool" &> /dev/null
         then
-            echo " "
-            echo " [ tick ] $tool installed. "
+            success "$tool installed using 'apt'"
+            return 0
+        elif sudo dnf install "$tool" &> /dev/null
+        then
+            success "$tool installed using 'dnf'"
+            return 0
+        elif sudo pacman -S --noconfirm "$tool" &> /dev/null
+        then
+            success "$tool installed using 'pacman'"
             return 0
         else
-            echo " [ cross ] could'nt install $tool using $OSTYPE package manager "
+            error "Couldn't install $tool using $OSTYPE package manager"
             return 1
         fi
+    else
+        error "Unsupported $OSTYPE"
+        exit 1
     fi
 }
 
 found()
 {
     local tool="$1"
-    echo "[ tick ] $tool found"
+    success "$tool found"
 }
 
 create_project()
@@ -79,13 +93,13 @@ create_project()
     then
         if mkdir -p "${project_dir}/src" "${project_dir}/include" "${project_dir}/build" "${project_dir}/docs"
         then
-            echo "[ tick ] Created project directory structure"
+            success "Created project directory structure: ${project_dir}/src ${project_dir}/include ${project_dir}/build ${project_dir}/docs"
         else
-            echo "[ cross ] Couldn't create project directory structure"
+            error "Couldn't create project directory structure"
             exit 1
         fi
     else
-        echo "[ cross ] Directory ./$project_dir already exists"
+        error "Directory ./$project_dir already exists"
         read -r -p "Do you want to continue[y/n]? " answer
 
         case $answer in
@@ -95,18 +109,18 @@ create_project()
         esac
     fi
 
-    cd ./"$PROJECT_NAME" || { echo "$(pwd): No such directory"; exit 1; }
+    cd ./"$project_dir" || { error "No such directory $project_dir"; exit 1; }
 }
 
 create_ignore_file()
 {
-
 cat - << _EOF_ > .gitignore
 build/
 *.o
 *.log
 _EOF_
 
+success "Created .gitignore file"
 }
 
 init_project_repo()
@@ -114,41 +128,17 @@ init_project_repo()
     local git_status="$1"
     if [[ "$git_status" = true ]]
     then
-        git init .
-
+        git init
+        
         create_ignore_file
-        echo "# $PROJECT_NAME" >> README.md
+        echo "# $PROJECT_NAME" >> "README.md"
+        
+        git add --all
+        git commit -m "Initial project setup" || { error "Git commit failed. Check Git Configurtion"; return 1; }
 
-        git add --all .
-        git commit -m "Initial project setup"
     else
-        echo "[ cross ] Git not found. Skipping Repository Initialisation."
-    fi
-}
-
-if [[ $# -ne 1 ]]
-then
-    usage
-fi
-
-# Supported tools
-hasgit=false
-hasgcc=false
-hasmake=false
-hasack=false
-
-tools=("git" "gcc" "make" "ack")
-
-check_tool_status()
-{
-    local tool="$1"
-    if hascmmnd "$tool"
-    then
-        found "$tool"
-        update_tool_status "$tool"
-    else
-        install "$tool" 
-        update_tool_status "$tool"
+       info "Git not found - skipping repository setup"
+       return 1
     fi
 }
 
@@ -156,65 +146,91 @@ update_tool_status()
 {
     local tool="$1"
     case "$tool" in
-        "git") 
-            hasgit=true
-            ;;
-        "gcc") 
-            hasgcc=true
-            ;;
-        "make") 
-            hasmake=true
-            ;;
-        "ack")
-            hasack=true
-            ;;
-        *) echo "$0: Tool not supported"
+        "git") hasgit=true ;;
+        "gcc") hasgcc=true ;;
+        "make") hasmake=true ;;
+        "ack") hasack=true ;;
+        *) info "Unsupported $tool"; return 0;
     esac
 }
 
-for tool in "${tools[@]}"
-do
-    case "$tool" in
-        "git") 
-            if hascmmnd "$tool"
-            then
-                found "$tool"
-                hasgit=true
-            else
-                install "$tool" && hasgit=true
-            fi
-            ;;
-        "gcc") 
-            if hascmmnd "$tool"
-            then
-                found "$tool"
-                hasgcc=true
-            else
-                install "$tool" && hasgcc=true
-            fi
-            ;;
-        "make") 
-            if hascmmnd "$tool"
-            then
-                found "$tool"
-                hasmake=true
-            else
-                install "$tool" && hasmake=true
-            fi
-            ;;
-        "ack")
-            check_tool_status "$tool"
-            ;;
-        *) echo "$0: Tool not supported"
-    esac
-done
+check_tool_status()
+{
+    local tool="$1"
+    if has_cmd "$tool"
+    then
+        found "$tool" && update_tool_status "$tool"
+    else
+        if install "$tool" 
+        then
+            update_tool_status "$tool"
+        fi
+    fi
+}
 
-echo " "
+create_project_config()
+{
+cat - << _EOF_ > project-config.txt
+Created Project $PROJECT_NAME : $(date)
+OS:$OSTYPE
+SHELL:$SHELL
+Tools detected:
+- git: $hasgit
+- gcc: $hasgcc
+- make: $hasmake
+- ack: $hasack
+_EOF_
 
-if init_project_repo "$hasgit"
+success "Created project config file"
+}
+
+# --- Main Execution ---
+
+# Validate inputs
+if [[ $# -ne 1 ]]
 then
-    echo "[ tick ] $PROJECT_NAME Repo Initialised."
+    usage
 fi
 
-echo "$hasack"
+# Declare variables
+PROJECT_NAME="$1"
+
+# Detect host OS
+macos=false
+linux=false
+case "$OSTYPE" in
+    darwin*) macos=true ;;
+    linux*) linux=true ;;
+    *) error "$0: unsupported $OSTYPE"; exit 1 ;;
+esac
+
+# Tools to check
+hasack=false
+hasgit=false
+hasgcc=false
+hasmake=false
+
+# Supported tools
+tools=("git" "gcc" "make" "ack")
+
+# Setup new directory or exit early
+create_project "$PROJECT_NAME"
+
+# Check installation
+for tool in "${tools[@]}"
+do
+    check_tool_status "$tool"
+done
+
+# Try to initialiase repo
+if init_project_repo "$hasgit"
+then
+    success "$PROJECT_NAME repository initialised"
+else
+    info "Skipped git repository not initialised"
+fi
+
+# Create project-config-file
+create_project_config
+
 exit 0
